@@ -228,7 +228,7 @@ areg y i.year int_dd*, a(id) robust
 * Aggregate to get their interaction-weighted estimator
 	* Compute weights by (dd,e) (where dd: relative time, e: cohort). I'm 
 	* writing this as eclass program so bootstrapping works, but for point 
-	* estimates that's not necessary - could just run lines 227 - 
+	* estimates that's not necessary - could just run lines 236 to 288 
 capture program drop SAest
 program define SAest, eclass
 	version 13.0
@@ -292,7 +292,7 @@ program define SAest, eclass
 end
 
 * Sun-Abraham estimator with bootstrapped standard errors
-		* 2 bootstrap reps for these purposes
+		* 5 bootstrap reps for these purposes
 set seed 1	
 bootstrap _b, reps(5) nowarn cluster(firms): SAest
 
