@@ -17,6 +17,12 @@ clear
 capture gr drop sim_1 sim_2
 capture log close
 capture set scheme plotplainblind
+
+	* Install svmat2 - I'm using this command to transform the matrix with the 
+	* estimates into a new data set while keeping the matrix column names as 
+	* variable names (cosmetics). svmat somehow doesn't have this functionality.   
+net install dm79, from(http://www.stata.com/stb/stb56) 
+
 set seed 20200403
 
 
