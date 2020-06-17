@@ -1,14 +1,14 @@
 ********************************************************************************
 /* 
-Name: 			baker_SA.do
+Name: 			baker_SA_noBootstrap.do
 Author: 		shan huang adapting scott cunningham (baylor)/andrew baker (stanford)
 Description: 
 	Illustrates how Sun-Abraham 2020 performs compared to 2WFE for a simulated 
 	data set with a never-treated cohort in staggered diff-in-diff setting. 
-	Standard errors are (unlike in the original paper) computed via bootstrap.
+	No standard errors, only point estimates.
 Written in stata version 13
 	
-Last updated: 	june 16, 2020
+Last updated: 	june 17, 2020
 Email: 			shuang@diw.de
 */
 ********************************************************************************
@@ -226,18 +226,12 @@ drop int_dd24_* dd24
 areg y i.year int_dd*, a(id) robust 
 
 * Aggregate to get their interaction-weighted estimator
-	* Compute weights by (dd,e) (where dd: relative time, e: cohort). I'm 
-	* writing this as eclass program so bootstrapping works, but for point 
-	* estimates that's not necessary - see baker_SA_noBootstrap file
-capture program drop SAest
-program define SAest, eclass
-	version 13.0
-	
+	* Compute weights by (dd,e) (where dd: relative time, e: cohort). 
 	mata: mata clear
 	
-	*** Step 1: Get the cohort-relative year specific effects
+	*** Step 1: Get the cohort-relative year specific effects	
 	quietly areg y i.year int_dd*, a(id) robust 
-	
+
 	* Get matrix dimensions right
 	qui: unique cohort
 	local E = `r(unique)'-1				// Total number of cohorts, dropping control group (4)
@@ -269,46 +263,34 @@ program define SAest, eclass
 		}
 	}	
 	
-	* Aggregate ATTs
+	* Aggregate cohort-relative time estimates
 	mata: DDm = J(DDneg, 1, 0)\J(DDpos, 1, 1/DDpos)			// Vector with all zeros in pre-treatment periods, and 1/(Number of post-treatment periods) in post-treatment periods; i.e. "weighting" for Diff-in-diff ATT
 	mata: ball = st_matrix("e(b)")
 	mata: b = ball[1, T+1..T+DD*E]							// Matrix of coefficient estimates for interaction terms
 	mata: bm = rowshape(b, E)'
 	mata: wm = rowshape(W, E)'
 	
-	mata: ATT_dd = rowsum(bm:*wm)		// Relative-time specific treatment effect estimates
-	mata: ATT = rowsum(bm:*wm)'*DDm		// Diff-in-diff treatment effect estimates
-	mata: coef = (ATT\ATT_dd)'
-	mata: st_matrix("coef", coef)
+	mata: ATT_dd = rowsum(bm:*wm)'			// Relative-time specific treatment effect estimates
+	mata: ATT_sa = rowsum(bm:*wm)'*DDm		// Diff-in-diff treatment effect estimates
+	mata: st_matrix("ATT_dd", ATT_dd')
+	mata: st_matrix("ATT_sa", ATT_sa)
 
 	foreach var of varlist dd* {
 		local namesB `namesB' "ATT_`var'"
 		}
-	matrix colnames coef = ATT `namesB' 
-	 
-	ereturn post coef 					// coef contains as first element the diff-in-diff ATT-estimate, followed by the relative year-specific ATTs
-    ereturn local cmd="bootstrap"
-end
+	matrix rownames ATT_dd = `namesB' 			
 
-* Sun-Abraham estimator with bootstrapped standard errors
-		* 5 bootstrap reps for these purposes
-set seed 1	
-bootstrap _b, reps(5) nowarn cluster(firms): SAest
-
-
-	* Save Sun-Abraham estimates
+	* Save results (note: requires to get vector of estimates into right shape by manually inserting 0 for the omitted category rel year -1)
 	qui: unique year
 	local T `r(unique)'
 	sum time_til, meanonly
 	local DDneg  = -`r(min)'-1		// drop rel year -1
 	local DDpos = `r(max)'+1		// add rel year 0
 
-	matrix Bsaall = e(b)'
-	matrix Bsa = (Bsaall[2..(`DDneg'+1),1]\0\Bsaall[(`DDneg' + 2)..(rowsof(Bsaall)),1])			// manually insert 0 as estimate for the ommitted category -1
+	matrix Bsa = (ATT_dd[1..(`DDneg'),1]\0\ATT_dd[(`DDneg' + 1)..(rowsof(ATT_dd)),1])
 	mat colnames Bsa = b_SA
-	local ATT_sa = round(Bsaall[1,1],0.1)
-
 	
+	local ATT_sa = round(ATT_sa[1,1],0.1)
 
 
 //------------------------------------------------------------------------------	
@@ -342,10 +324,10 @@ line att_dd b_2wfe b_SA time_til, ///
 	name(sim_2) ///
 	note("Simulation with cohort-specific treatment effects and linear growth in treatment effects over time.					" "30 calendar periods: 4 treatment cohorts with size 250 units each (treatment onset in periods 5, 13, 19, 25) and a never-treated group with size 125.", size(vsmall))
 
-di `ATT_true'
-di `ATT_2wfeNt'
-di `ATT_2wfe'
-di `ATT_sa'
+di `ATT_true'		// True effect
+di `ATT_2wfeNt'		// TWFE without never-treated group
+di `ATT_2wfe'		// TWFE
+di `ATT_sa'			// Sun-Abraham
 	
 
 	
@@ -355,4 +337,3 @@ di `ATT_sa'
 	
 	
 	
-
