@@ -137,7 +137,8 @@ areg y2 i.year treat, a(id) robust
 
 * Heterogenous treatment effects over time when there wouldn't be a never-treated group
 areg y i.year treat if cohort!=0, a(id) robust 					// Diff-in-diff
-areg y i.year dd1 - dd23 dd25-dd48 if cohort!=0, a(id) robust 	// Dynamic spec
+areg y i.year dd1 - dd23 dd25-dd48 if cohort!=0, a(id) robust 	// Dynamic spec 
+	* there are multicollinearities when the never-treated group is dropped, so not all relative-year specific effects can be computed
 
 * Heterogenous treatment effect over time 
 areg y i.year treat, a(id) robust 								// Diff-in-diff
@@ -173,8 +174,8 @@ mat list ATT_true_dd
 	* are the same regressions as in the section above.
 
 * Locals to extract the right coefficients for later display
-	unique year
-	local T `r(unique)'
+	tab year, nofreq
+	local T `r(r)'
 	sum time_til, meanonly
 	local DDneg  = -`r(min)'-1			// Max number of pre-treatment periods (drop relative year -1) = 23 periods
 	disp(`DDneg')
@@ -239,12 +240,12 @@ program define SAest, eclass
 	quietly areg y i.year int_dd*, a(id) robust 
 	
 	* Get matrix dimensions right
-	qui: unique cohort
-	local E = `r(unique)'-1				// Total number of cohorts, dropping control group (4)
-	qui: unique time_til
-	local DD = `r(unique)'-1 			// Total number of relative years, dropping relative year -1 (23+24=47)
-	qui: unique year
-	local T = `r(unique)'				// Total number of calendar years (30)
+	tab cohort, nofreq
+	local E = `r(r)'-1					// Total number of cohorts, dropping control group (4)
+	tab time_til, nofreq
+	local DD = `r(r)'-1 				// Total number of relative years, dropping relative year -1 (23+24=47)
+	tab year, nofreq
+	local T = `r(r)'					// Total number of calendar years (30)
 	qui: sum time_til
 	local DDneg = -`r(min)' - 1 		// Number of pre-treatment periods, dropping rel year -1 (23)
 	local DDpos = `DD' - `DDneg'			// Number of post-treatment periods, including rel year 0 (24)
@@ -297,8 +298,8 @@ bootstrap _b, reps(5) nowarn cluster(firms): SAest
 
 
 	* Save Sun-Abraham estimates
-	qui: unique year
-	local T `r(unique)'
+	tab year, nofreq
+	local T `r(r)'
 	sum time_til, meanonly
 	local DDneg  = -`r(min)'-1		// drop rel year -1
 	local DDpos = `r(max)'+1		// add rel year 0
