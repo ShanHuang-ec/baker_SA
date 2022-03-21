@@ -8,7 +8,7 @@ Description:
 	Standard errors are (unlike in the original paper) computed via bootstrap.
 Written in stata version 13
 	
-Last updated: 	june 16, 2020
+Last updated: 	march 21, 2022
 Email: 			shuang@diw.de
 */
 ********************************************************************************
@@ -24,7 +24,7 @@ capture set scheme plotplainblind
 net install dm79, from(http://www.stata.com/stb/stb56) 
 
 set seed 20200403
-
+version 13
 
 //------------------------------------------------------------------------------ 
 // SIMULATE DATA SET
@@ -146,7 +146,7 @@ areg y i.year treat if cohort!=0, a(id) robust 					// Diff-in-diff
 areg y i.year dd7 - dd23 dd25-dd48 if cohort!=0, a(id) robust	// Dynamic spec 
 	* there are multicollinearities when the never-treated group is dropped, so not all relative-year specific effects can be computed
 	* manually set first relative periods and relative period -1 as omitted categories as proposed in borusyak and jaravel (2017)
-	/* Without specifying omitted categories beside -1
+	/* Without specifying omitted categories beside -1 (old code)
 		areg y i.year dd1 - dd23 dd25-dd48 if cohort!=0, a(id) robust
 	*/
 	
@@ -198,27 +198,34 @@ qui: areg y i.year treat if cohort!=0, a(id) robust
 	local ATT_2wfeNt = round(b[1,(`T'+1)],0.1)		
 
 * Dynamic TWFE with no never-treated group 	
+	* there are multicollinearities when the never-treated group is dropped, so not all relative-year specific effects can be computed
+	* manually set first relative periods and relative period -1 as omitted categories as proposed in borusyak and jaravel (2017)
 qui: areg y i.year dd7 - dd23 dd25-dd48 if cohort!=0, a(id) robust
 	matrix Ball2wfeNt = e(b)'
-	matrix B2wfeNt = (J(1,6,0)\Ball2wfeNt[(`T'+1)..(`T'+`DDneg'),1]\0\Ball2wfeNt[(`T'+`DDneg' + 1)..(rowsof(Ball2wfeNt)-1),1])		// Stack matrices, with a 0 for the effect in rel year -1
+	matrix B2wfeNt = (J(6,1,0)\Ball2wfeNt[(`T'+1)..(`T'+`DDneg'-6),1]\0\Ball2wfeNt[(`T'+`DDneg'-6 + 1)..(rowsof(Ball2wfeNt)-1),1])		// Stack matrices, with a 0 for the omitted categories
 	mat colnames B2wfeNt = b_2wfeNt
+/*
+	* Without specifying omitted categories beside -1 (old code)
+		qui: areg y i.year dd1 - dd23 dd25-dd48 if cohort!=0, a(id) robust
+		matrix Ball2wfeNt = e(b)'
+		matrix B2wfeNt = (Ball2wfeNt[(`T'+1)..(`T'+`DDneg'),1]\0\Ball2wfeNt[(`T'+`DDneg' + 1)..(rowsof(Ball2wfeNt)-1),1])		
+		mat colnames B2wfeNt = b_2wfeNt
+*/ 
+
 
 * Static TWFE
 qui: areg y i.year treat, a(id) robust 
 	mat b = e(b)
 	local ATT_2wfe = round(b[1,(`T'+1)],0.1)	
 
-* Dynamic TWFE with no never-treated group 	
-qui: areg y i.year dd7 - dd23 dd25-dd48 if cohort!=0, a(id) robust
-	matrix Ball2wfeNt = e(b)'
-	matrix B2wfeNt = (J(6,1,0)\Ball2wfeNt[(`T'+1)..(`T'+`DDneg'-6),1]\0\Ball2wfeNt[(`T'+`DDneg'-6 + 1)..(rowsof(Ball2wfeNt)-1),1])		// Stack matrices, with a 0 for the omitted categories
-	mat colnames B2wfeNt = b_2wfeNt
-	/* Without specifying omitted categories beside -1
-		qui: areg y i.year dd1 - dd23 dd25-dd48 if cohort!=0, a(id) robust
-		matrix Ball2wfeNt = e(b)'
-		matrix B2wfeNt = (Ball2wfeNt[(`T'+1)..(`T'+`DDneg'),1]\0\Ball2wfeNt[(`T'+`DDneg' + 1)..(rowsof(Ball2wfeNt)-1),1])		
-		mat colnames B2wfeNt = b_2wfeNt
-	*/
+* Dynamic TWFE
+// Problem even when there is a never-treated group... all these significant pre-trends shouldn't be there!
+qui: areg y i.year dd1 - dd23 dd25-dd48, a(id) robust 
+	matrix Ball2wfe = e(b)'
+	matrix B2wfe = (Ball2wfe[(`T'+1)..(`T'+`DDneg'),1]\0\Ball2wfe[(`T'+`DDneg' + 1)..(rowsof(Ball2wfe)-1),1])				// Stack matrices, with a 0 for the effect in the omitted categories
+	mat colnames B2wfe = b_2wfe
+	
+	
 
 
 //------------------------------------------------------------------------------	
